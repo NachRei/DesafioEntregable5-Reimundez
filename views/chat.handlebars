@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat</title>
+</head>
+<body>
+  <h1>Chat</h1>
+  <ul id="messages"></ul>
+  <form id="chatForm" action="/chat" method="POST">
+    <input id="messageInput" autocomplete="off" /><button>Send</button>
+  </form>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const form = document.getElementById('chatForm');
+    const input = document.getElementById('messageInput');
+    const ul = document.getElementById('messages');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (input.value) {
+        socket.emit('chatMessage', {
+          user: 'Usuario', // Puedes obtener esto del usuario autenticado si lo deseas
+          message: input.value,
+        });
+        input.value = '';
+      }
+    });
+
+    socket.on('message', (message) => {
+      const li = document.createElement('li');
+      li.textContent = `${message.user}: ${message.message}`;
+      ul.appendChild(li);
+    });
+  </script>
+</body>
+</html>
