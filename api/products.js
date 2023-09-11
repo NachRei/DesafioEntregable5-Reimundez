@@ -1,39 +1,60 @@
 const express = require('express');
 const router = express.Router();
-const ProductManager = require('../productManager');
-
-const productManager = new ProductManager('data/productos.json');
+const Product = require('../models/productModel');}
 
 router.get('/', async (req, res) => {
-  const { limit } = req.query;
   try {
-    const products = await productManager.getProducts();
-    if (limit) {
-      const parsedLimit = parseInt(limit, 10);
-      if (!isNaN(parsedLimit) && parsedLimit > 0) {
-        res.json(products.slice(0, parsedLimit));
-      } else {
-        res.status(400).json({ error: 'El valor del límite debe ser un número entero positivo.' });
-      }
-    } else {
-      res.json(products);
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener los productos.' });
-  }
-});
+    // Configuración de parámetros opcionales
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const query = req.query.query || '';
+    const sort = req.query.sort === 'desc' ? -1 : 1;
 
-router.get('/:pid', async (req, res) => {
-  const productId = req.params.pid;
-  try {
-    const product = await productManager.getProductById(productId);
-    if (product) {
-      res.json(product);
-    } else {
-      res.status(404).json({ error: 'Producto no encontrado.' });
+    // Definir el filtro en función de la consulta
+    const filter = {};
+    if (query) {
+      filter.$or = [
+        { title: { $regex: query, $options: 'i' } },
+        { description: { $regex: query, $options: 'i' } },
+      ];
     }
+
+    // Calcular el índice de inicio y final para paginación
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+
+    // Contar el total de productos
+    const totalProducts = await Product.countDocuments(filter);
+
+    // Obtener los productos con paginación y ordenamiento
+    const products = await Product.find(filter)
+      .sort({ price: sort })
+      .skip(startIndex)
+      .limit(limit);
+
+    // Calcular información de paginación
+    const totalPages = Math.ceil(totalProducts / limit);
+    const hasPrevPage = page > 1;
+    const hasNextPage = page < totalPages;
+    const prevPage = hasPrevPage ? page - 1 : null;
+    const nextPage = hasNextPage ? page + 1 : null;
+
+    // Construir la respuesta JSON con todos estos datos
+    const response = {
+      status: 'success',
+      payload: products,
+      totalPages,
+      prevPage,
+      nextPage,
+      page,
+      hasPrevPage,
+      hasNextPage,
+    };
+
+    res.json(response);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener el producto.' });
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Error en el servidor' });
   }
 });
 
