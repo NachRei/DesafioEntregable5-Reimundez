@@ -1,0 +1,12 @@
+<h1>Bienvenido a la Tienda de Productos</h1>
+
+{{#if user}}
+  <p>Hola, {{user.username}}. ¡Disfruta de tus compras!</p>
+{{/if}}
+
+<!-- Aquí puedes mostrar la lista de productos -->
+<ul>
+  {{#each products}}
+    <li>{{this.name}} - Precio: ${{this.price}}</li>
+  {{/each}}
+</ul>

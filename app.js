@@ -3,7 +3,11 @@ const http = require('http');
 const socketIo = require('socket.io');
 const exphbs = require('express-handlebars');
 const mongoose = require('mongoose');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const passport = require('passport'); // Agregamos Passport
+const LocalStrategy = require('passport-local').Strategy; // Agregamos passport-local
+const expressSession = require('express-session');
+const bcrypt = require('bcrypt'); // Para el hashing de contraseñas
+const User = require('./models/userModel'); // Importa tu modelo de usuario
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
@@ -12,6 +16,7 @@ const io = socketIo(server);
 const Product = require('./models/productModel');
 const Cart = require('./models/cartModel');
 const Message = require('./models/messageModel');
+const User = require('./models/userModel');
 
 // Configurar Handlebars
 app.engine('handlebars', exphbs());
@@ -22,24 +27,101 @@ const productsRouter = require('./api/products');
 const cartsRouter = require('./api/carts');
 const viewsRouter = require('./views');
 
-app.use(express.json());
-app.use('/api/products', productsRouter);
-app.use('/api/carts', cartsRouter);
-app.use('/', viewsRouter(io));  // Pasar la instancia de "io" al viewsRouter
-
-const PORT = 8080;
-server.listen(PORT, () => {
-  console.log(`Servidor Express escuchando en el puerto ${PORT}`);
+// Conecta a tu base de datos MongoDB Atlas
+mongoose.connect('mongodb+srv://<username>:<password>@cluster0.dpljy8a.mongodb.net/?retryWrites=true&w=majority', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
 
-// Configurar conexión a la base de datos de MongoDB Atlas
+app.use(express.json());
 
-const uri = "mongodb+srv://<username>:<password>@cluster0.dpljy8a.mongodb.net/?retryWrites=true&w=majority";
-mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+// Configura Passport
+app.use(
+  expressSession({
+    secret: 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+app.use(passport.initialize());
+app.use(passport.session());
 
-// Ruta para el chat
-app.get('/chat', (req, res) => {
-  res.render('chat');
+passport.use(
+  new LocalStrategy(async (username, password, done) => {
+    try {
+      // Busca el usuario en la base de datos por nombre de usuario
+      const user = await User.findOne({ username });
+
+      if (!user) {
+        return done(null, false, { message: 'Usuario no encontrado' });
+      }
+
+      // Comprueba si la contraseña es correcta
+      if (bcrypt.compareSync(password, user.password)) {
+        return done(null, user);
+      } else {
+        return done(null, false, { message: 'Contraseña incorrecta' });
+      }
+    } catch (error) {
+      return done(error);
+    }
+  })
+);
+
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (error) {
+    done(error);
+  }
+});
+
+app.use('/api/products', productsRouter);
+app.use('/api/carts', cartsRouter);
+
+// Rutas para autenticación y autorización
+
+// Ruta para el formulario de registro
+app.get('/register', (req, res) => {
+  res.render('register');
+});
+
+// Ruta para procesar el registro
+app.post('/register', async (req, res) => {
+  // Procesar el registro y crear un nuevo usuario en la base de datos
+  // Hash de la contraseña y guarda el usuario
+  // Redireccionar al usuario a la vista de inicio de sesión
+});
+
+// Ruta para el formulario de inicio de sesión
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+// Ruta para procesar el inicio de sesión
+app.post('/login', passport.authenticate('local', {
+  successRedirect: '/products', // Redireccionar después del inicio de sesión exitoso
+  failureRedirect: '/login', // Redireccionar en caso de fallo de inicio de sesión
+}));
+
+// Ruta para cerrar sesión
+app.get('/logout', (req, res) => {
+  req.logout();
+  res.redirect('/login');
+});
+
+// Ruta protegida, solo accesible para usuarios autenticados
+app.get('/profile', (req, res) => {
+  if (req.isAuthenticated()) {
+    res.render('profile', { user: req.user }); // Renderizar la vista de perfil
+  } else {
+    res.redirect('/login'); // Redireccionar si no está autenticado
+  }
 });
 
 // Configurar Socket.io para el chat
@@ -80,4 +162,13 @@ app.get('/carts/:cid', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener el carrito.' });
   }
+});
+
+// Configura las rutas de autenticación
+const authRouter = require('./auth/auth');
+app.use('/auth', authRouter);
+
+const PORT = 8080;
+server.listen(PORT, () => {
+  console.log(`Servidor Express escuchando en el puerto ${PORT}`);
 });
