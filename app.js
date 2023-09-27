@@ -68,6 +68,39 @@ passport.use(
   })
 );
 
+// Configurar Passport GitHub Strategy para la autenticación de GitHub
+passport.use(
+  new GitHubStrategy(
+    {
+      clientID: 'e1b937141694073d0bd8',
+      clientSecret: '30609359fece4f1622b531b9c203f22e7f840f7f',
+      callbackURL: 'http://localhost:8080/auth/github/callback', // URL de redirección de GitHub
+    },
+    (accessToken, refreshToken, profile, done) => {
+      User.findOne({ githubId: profile.id }, (err, user) => {
+        if (err) {
+          return done(err);
+        }
+        if (user) {
+          return done(null, user); // Usuario encontrado, autenticación exitosa
+        } else {
+          // Si el usuario no existe, puedes crearlo en tu base de datos
+          const newUser = new User({
+            username: profile.username, // O utiliza otro campo de perfil de GitHub
+            githubId: profile.id,
+          });
+          newUser.save((err) => {
+            if (err) {
+              return done(err);
+            }
+            return done(null, newUser); // Usuario creado y autenticado exitosamente
+          });
+        }
+      });
+    }
+  )
+);
+
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
